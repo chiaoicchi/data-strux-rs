@@ -50,7 +50,7 @@ impl Dsu {
                 if *p.add(px) >= 0 {
                     *p.add(x) = *p.add(px);
                 }
-                x = px as usize;
+                x = px;
             }
         }
         x

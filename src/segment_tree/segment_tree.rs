@@ -203,7 +203,7 @@ impl<S: Monoid> SegmentTree<S> {
     }
 
     #[inline]
-    pub fn max_right<P>(&self, l: usize, p: P) -> usize
+    pub fn max_right<P>(&self, _l: usize, _p: P) -> usize
     where
         P: Fn(&S) -> bool,
     {
@@ -211,7 +211,7 @@ impl<S: Monoid> SegmentTree<S> {
     }
 
     #[inline]
-    pub fn min_left<P>(&self, r: usize, p: P) -> usize
+    pub fn min_left<P>(&self, _r: usize, _p: P) -> usize
     where
         P: Fn(&S) -> bool,
     {

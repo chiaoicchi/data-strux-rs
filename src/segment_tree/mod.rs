@@ -1,7 +1,7 @@
+pub mod core;
+pub mod core_with;
 pub mod monoid;
-pub mod segment_tree;
-pub mod segment_tree_with;
 
+pub use core::SegmentTree;
+pub use core_with::SegmentTreeWith;
 pub use monoid::Monoid;
-pub use segment_tree::SegmentTree;
-pub use segment_tree_with::SegmentTreeWith;

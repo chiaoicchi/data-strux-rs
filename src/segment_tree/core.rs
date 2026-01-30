@@ -8,18 +8,11 @@ use crate::segment_tree::monoid::Monoid;
 /// - Range query: `range_fold(l..r)` returns `op(a[l], op(a[l+1], ..., a[r-1]))`
 ///
 /// Both operations run in O(log n) time.
-#[repr(C)]
-pub struct SegmentTree<S: Monoid> {
+pub struct SegmentTree<S: Monoid>(
     /// Binary heap-like array storing the tree nodes.
     /// Index 1 is the root, index `size + i` is the leaf for element `i`.
-    data: Box<[S]>,
-    /// Number of elements in the original array.
-    n: usize,
-    /// Size of the tree (smallest power of 2 >= n).
-    size: usize,
-    /// log2(size), used for iteration bounds.
-    log: usize,
-}
+    Box<[S]>,
+);
 
 impl<S: Monoid> SegmentTree<S> {
     /// Creates a new segment tree with `n` elements, all initialized to `S::id()`.
@@ -28,13 +21,30 @@ impl<S: Monoid> SegmentTree<S> {
     ///
     /// O(n)
     pub fn new(n: usize) -> Self {
-        let size = n.next_power_of_two();
-        Self {
-            data: vec![S::id(); 2 * size].into_boxed_slice(),
-            n,
-            size,
-            log: size.trailing_zeros() as usize,
+        Self(vec![S::id(); n << 1].into_boxed_slice())
+    }
+
+    /// Creates a new segment tree from a vec.
+    ///
+    /// # Time complexity
+    ///
+    /// O(n)
+    pub fn from_vec(mut v: Vec<S>) -> Self {
+        let n = v.len();
+        v.reserve(n);
+        unsafe {
+            let v = v.as_mut_ptr();
+            v.copy_to(v.add(n), n);
+            for i in (1..n).rev() {
+                v.add(i)
+                    .write(S::op(&*v.add(i << 1), &*v.add((i << 1) + 1)));
+            }
+            v.write(S::id());
         }
+        unsafe {
+            v.set_len(n << 1);
+        }
+        Self(v.into_boxed_slice())
     }
 
     /// Creates a new segment tree from a slice.
@@ -44,21 +54,16 @@ impl<S: Monoid> SegmentTree<S> {
     /// O(n)
     pub fn from_slice(v: &[S]) -> Self {
         let n = v.len();
-        let size = n.next_power_of_two();
-        let mut data = vec![S::id(); 2 * size];
-        data[size..size + n].clone_from_slice(v);
+        let mut data = vec![S::id(); n << 1];
         unsafe {
             let d = data.as_mut_ptr();
-            for i in (1..size).rev() {
-                *d.add(i) = S::op(&*d.add(2 * i), &*d.add(2 * i + 1));
+            std::ptr::copy_nonoverlapping(v.as_ptr(), d.add(n), n);
+            for i in (1..n).rev() {
+                *d.add(i) = S::op(&*d.add(i << 1), &*d.add((i << 1) + 1));
             }
         }
-        Self {
-            data: data.into_boxed_slice(),
-            n,
-            size,
-            log: size.trailing_zeros() as usize,
-        }
+
+        Self(data.into_boxed_slice())
     }
 
     /// Sets the value at index `i` to `x`.
@@ -73,18 +78,18 @@ impl<S: Monoid> SegmentTree<S> {
     #[inline]
     pub fn set(&mut self, mut i: usize, x: S) {
         debug_assert!(
-            i < self.n,
+            i < self.len(),
             "index out of bounds: i={}, len={}",
             i,
             self.len(),
         );
-        i += self.size;
+        i += self.len();
         unsafe {
-            let d = self.data.as_mut_ptr();
+            let d = self.0.as_mut_ptr();
             *d.add(i) = x;
-            for t in 1..=self.log {
-                let p = i >> t;
-                *d.add(p) = S::op(&*d.add(2 * p), &*d.add(2 * p + 1));
+            while i > 1 {
+                i >>= 1;
+                *d.add(i) = S::op(&*d.add(i << 1), &*d.add((i << 1) + 1));
             }
         }
     }
@@ -101,18 +106,18 @@ impl<S: Monoid> SegmentTree<S> {
     #[inline]
     pub fn operate(&mut self, mut i: usize, x: S) {
         debug_assert!(
-            i < self.n,
+            i < self.len(),
             "index out of bounds: i={}, len={}",
             i,
             self.len(),
         );
-        i += self.size;
+        i += self.len();
         unsafe {
-            let d = self.data.as_mut_ptr();
+            let d = self.0.as_mut_ptr();
             *d.add(i) = S::op(&*d.add(i), &x);
-            for t in 1..=self.log {
-                let p = i >> t;
-                *d.add(p) = S::op(&*d.add(2 * p), &*d.add(2 * p + 1));
+            while i > 1 {
+                i >>= 1;
+                *d.add(i) = S::op(&*d.add(i << 1), &*d.add((i << 1) + 1));
             }
         }
     }
@@ -129,12 +134,12 @@ impl<S: Monoid> SegmentTree<S> {
     #[inline]
     pub fn get(&self, i: usize) -> S {
         debug_assert!(
-            i < self.n,
+            i < self.len(),
             "index out of bounds: i={}, len={}",
             i,
             self.len(),
         );
-        unsafe { self.data.get_unchecked(self.size + i).clone() }
+        unsafe { self.0.get_unchecked(self.len() + i).clone() }
     }
 
     /// Returns `op(a[l], a[l+1], ..., a[r-1])` for the given range.
@@ -154,40 +159,45 @@ impl<S: Monoid> SegmentTree<S> {
             std::ops::Bound::Unbounded => 0,
             std::ops::Bound::Included(&x) => x,
             std::ops::Bound::Excluded(&x) => x + 1,
-        } + self.size;
+        } + self.len();
         let mut r = match range.end_bound() {
-            std::ops::Bound::Unbounded => self.n,
+            std::ops::Bound::Unbounded => self.len(),
             std::ops::Bound::Included(&x) => x + 1,
             std::ops::Bound::Excluded(&x) => x,
-        } + self.size;
+        } + self.len();
         debug_assert!(
             l <= r,
             "left bound must be less than or equal to right bound: l={}, r={}",
-            l - self.size,
-            r - self.size,
+            l - self.len(),
+            r - self.len(),
         );
         debug_assert!(
-            r <= self.size + self.n,
+            r <= self.len() << 1,
             "index out of bounds: r={}, len={}",
-            r - self.size,
-            self.n,
+            r - self.len(),
+            self.len(),
         );
+        l >>= l.trailing_zeros();
+        r >>= r.trailing_zeros();
 
         let mut left = S::id();
         let mut right = S::id();
+
         unsafe {
-            let d = self.data.as_ptr();
-            while l < r {
-                if l & 1 == 1 {
+            let d = self.0.as_ptr();
+            loop {
+                if l >= r {
                     left = S::op(&left, &*d.add(l));
                     l += 1;
-                }
-                if r & 1 == 1 {
+                    l >>= l.trailing_zeros();
+                } else {
                     r -= 1;
                     right = S::op(&*d.add(r), &right);
+                    r >>= r.trailing_zeros();
                 }
-                l >>= 1;
-                r >>= 1;
+                if l == r {
+                    break;
+                }
             }
         }
         S::op(&left, &right)
@@ -199,7 +209,7 @@ impl<S: Monoid> SegmentTree<S> {
     ///
     /// O(1)
     pub fn all_fold(&self) -> S {
-        unsafe { self.data.get_unchecked(1).clone() }
+        unsafe { self.0.get_unchecked(1).clone() }
     }
 
     #[inline]
@@ -225,7 +235,7 @@ impl<S: Monoid> SegmentTree<S> {
     /// O(1)
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.n
+        self.0.len() >> 1
     }
 
     /// Returns `true` if the segment tree is empty.
@@ -235,6 +245,6 @@ impl<S: Monoid> SegmentTree<S> {
     /// O(1)
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
-        self.n == 0
+        self.len() == 0
     }
 }

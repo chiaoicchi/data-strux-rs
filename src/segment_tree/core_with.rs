@@ -60,8 +60,8 @@ where
         }
         Self {
             data: v.into_boxed_slice(),
-            id: id,
-            op: op,
+            id,
+            op,
         }
     }
 

@@ -182,6 +182,9 @@ where
             r - self.len(),
             self.len(),
         );
+        if l == r {
+            return self.id.clone();
+        }
         l >>= l.trailing_zeros();
         r >>= r.trailing_zeros();
 

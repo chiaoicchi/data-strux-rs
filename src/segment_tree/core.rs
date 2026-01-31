@@ -177,6 +177,9 @@ impl<S: Monoid> SegmentTree<S> {
             r - self.len(),
             self.len(),
         );
+        if l == r {
+            return S::id();
+        }
         l >>= l.trailing_zeros();
         r >>= r.trailing_zeros();
 

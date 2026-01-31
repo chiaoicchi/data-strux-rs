@@ -129,7 +129,7 @@ impl<S: Monoid> FenwickTree<S> {
     ///
     /// O(1)
     pub fn pop(&mut self) -> Option<S> {
-        if self.len() == 0 { None } else { self.0.pop() }
+        if self.is_empty() { None } else { self.0.pop() }
     }
 
     /// Creates a new empty fenwick tree with the specified capacity.

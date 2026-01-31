@@ -133,7 +133,7 @@ impl<S: Monoid, F: Action<S>> LazySegmentTree<S, F> {
             self.push(i >> t);
         }
         unsafe {
-            *self.data.get_unchecked_mut(i) = S::op(&self.data.get_unchecked(i), &x);
+            *self.data.get_unchecked_mut(i) = S::op(self.data.get_unchecked(i), &x);
         }
         while i > 1 {
             i >>= 1;
